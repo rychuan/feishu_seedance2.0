@@ -51,11 +51,11 @@ export async function pollTask(
     const status = (queryRes as SeedanceQueryResponse)?.status;
     debugLog({ pollIndex: i, status, taskId });
 
-    if (status === 'succeeded' || TERMINAL_STATUSES.includes(status as any)) {
-      return queryRes as SeedanceQueryResponse;
-    }
+   if (status === 'succeeded' || TERMINAL_STATUSES.includes(status as any)) {
+     return queryRes as SeedanceQueryResponse;
+   }
 
-    if (status && !['queued', 'processing', 'succeeded', ...TERMINAL_STATUSES].includes(status)) {
+    if (!['queued', 'processing', 'succeeded', ...TERMINAL_STATUSES].includes(status)) {
       if (status === lastUnrecognizedStatus) {
         unrecognizedCount++;
       } else {

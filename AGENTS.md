@@ -27,7 +27,7 @@ Single-entry Feishu bitable field shortcut (字段捷径). Entry point: `src/ind
 - **Domain whitelist is mandatory** — all external request domains must be declared via `basekit.addDomainList()`. Missing domains = silently blocked requests.
 - **Feishu attachment URLs are internal-only** — `tmp_url` from attachment fields is only accessible within Feishu auth context. Images → download+base64 data URI; Video/Audio → download+upload to litterbox.catbox.moe for public URL.
 - **Seedance API video_url doesn't support base64** — only public HTTP/HTTPS URLs. That's why videos/audio go through litterbox upload.
-- **Video pixel limit** — r2v mode requires width×height ≤ 927,408. `compressVideoIfNeeded()` in media.ts handles this via ffmpeg.
+- **Video pixel limit** — r2v mode requires widthu00d7height u2264 927,408. This is not yet handled by the current code; ensure input dimensions stay within limits.
 - **API parameters are top-level** — `duration`, `ratio`, `watermark`, `generate_audio` etc. go in the request body root, NOT inside the `content` array or prompt text.
 - **`FieldType.Object` for resultType is unreliable** — if switching from `FieldType.Text`, test thoroughly. Text output with `\n`-separated fields is the safe fallback.
 - **Polling timeout** — max 120 iterations with progressive backoff (10s→15s→20s). Consecutive 5 fetch failures triggers early abort.

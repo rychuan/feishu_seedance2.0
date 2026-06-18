@@ -74,10 +74,18 @@ export function extractAudioAttachments(attachmentValue: Attachment[]): Attachme
 
 export function mergeAttachmentFields(params: any, fieldKeys: string[]): Attachment[] {
   const merged: Attachment[] = [];
+  const seen = new Set<string>();
   for (const key of fieldKeys) {
     const fieldData = params[key];
     if (Array.isArray(fieldData) && fieldData.length > 0) {
-      merged.push(...(fieldData as Attachment[]));
+      for (const item of (fieldData as Attachment[])) {
+        const dedupKey = item.tmp_url || item.url || item.name || '';
+        if (dedupKey) {
+          if (seen.has(dedupKey)) continue;
+          seen.add(dedupKey);
+        }
+        merged.push(item);
+      }
     }
   }
   return merged;
