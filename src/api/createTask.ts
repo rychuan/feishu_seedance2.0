@@ -8,9 +8,10 @@ import {
   batchDownloadAndEncode,
   batchDownloadAndUploadVideos,
   batchDownloadAndUploadAudios,
+  countAttachments,
+  checkR2VPixelLimit,
 } from '../utils/media';
 import { SafeFetchFn, sanitizeForOutput } from '../utils/fetch';
-import { countAttachments } from '../utils/media';
 import { sleep } from '../utils/poll';
 
 const MAX_CREATE_RETRIES = 2;
@@ -96,7 +97,11 @@ export async function buildContent(
       warnings.push(`${result.failures}张图片下载失败`);
     }
 
+    // r2v 像素限制校验 — 对首帧和尾帧图片检查分辨率
+    // 因为 r2v 模式要求 width x height <= 927,408
     if (base64Uris.length >= 1) {
+      const firstName = imageAttachments[0]?.name || '首帧图片';
+      checkR2VPixelLimit(base64Uris[0], firstName);
       content.push({
         type: 'image_url',
         image_url: { url: base64Uris[0] },
@@ -104,6 +109,8 @@ export async function buildContent(
       });
     }
     if (base64Uris.length >= 2) {
+      const secondName = imageAttachments[1]?.name || '尾帧图片';
+      checkR2VPixelLimit(base64Uris[1], secondName);
       content.push({
         type: 'image_url',
         image_url: { url: base64Uris[1] },
@@ -154,6 +161,10 @@ export async function buildContent(
   return { content, warnings };
 }
 
+/**
+ * 构建 Seedance API 请求体。
+ * 所有布尔字段只在 true 时写入，让 API 自行处理默认值（false）。
+ */
 function buildRequestBody(params: FormItemParams, content: SeedanceContentItem[]): Record<string, any> {
   const body: Record<string, any> = {
     model: params.model,
@@ -166,8 +177,12 @@ function buildRequestBody(params: FormItemParams, content: SeedanceContentItem[]
   if (params.ratio) {
     body.ratio = params.ratio;
   }
-  body.watermark = params.watermark;
-  body.generate_audio = params.generateAudio;
+  if (params.watermark) {
+    body.watermark = true;
+  }
+  if (params.generateAudio) {
+    body.generate_audio = true;
+  }
   if (params.returnLastFrame) {
     body.return_last_frame = true;
   }

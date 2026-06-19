@@ -5,6 +5,9 @@ import { SafeFetchFn } from './fetch';
 const MAX_CONSECUTIVE_FAILURES = 5;
 const MAX_UNRECOGNIZED_STATUS_COUNT = 10;
 
+/** 轮询过程中视为"仍在进行中"的状态 */
+const ACTIVE_STATUSES = ['queued', 'processing'] as const;
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -51,11 +54,11 @@ export async function pollTask(
     const status = (queryRes as SeedanceQueryResponse)?.status;
     debugLog({ pollIndex: i, status, taskId });
 
-   if (status === 'succeeded' || TERMINAL_STATUSES.includes(status as any)) {
-     return queryRes as SeedanceQueryResponse;
-   }
+    if (status === 'succeeded' || TERMINAL_STATUSES.includes(status as any)) {
+      return queryRes as SeedanceQueryResponse;
+    }
 
-    if (!['queued', 'processing', 'succeeded', ...TERMINAL_STATUSES].includes(status)) {
+    if (![...ACTIVE_STATUSES, 'succeeded', ...TERMINAL_STATUSES].includes(status)) {
       if (status === lastUnrecognizedStatus) {
         unrecognizedCount++;
       } else {

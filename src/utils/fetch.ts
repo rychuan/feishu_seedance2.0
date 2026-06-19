@@ -20,6 +20,13 @@ function redactSensitive(text: string): string {
     .replace(/(?:api[_-]?key|token|secret)["\s:=]+[\w\-]{10,}/gi, '[REDACTED]');
 }
 
+/**
+ * 创建安全 Fetch 包装器。
+ *
+ * 约定：此函数仅处理 JSON API 响应 — 内部调用 `res.text()` 消费响应流后
+ * 进行 JSON.parse。不适用于二进制下载、流式端点或非 JSON 内容类型的请求。
+ * 二进制下载请使用 rawFetch（调用方自行处理 buffer/arrayBuffer）。
+ */
 export function createSafeFetch(
   context: any,
   debugLog: (arg: any, showContext?: boolean) => void

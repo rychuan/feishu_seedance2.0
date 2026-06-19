@@ -41,6 +41,71 @@ function normalizeSelect(val: unknown): string {
   return String(val);
 }
 
+/**
+ * 解析 prompt 文本。飞书表格中的文本列可能以多种形式传递：
+ * 纯字符串、text/value/link 对象的数组、或单个对象。
+ * 返回非空的 prompt 字符串，或空字符串表示无有效输入。
+ */
+function parsePromptText(rawPrompt: unknown): string {
+  if (typeof rawPrompt === 'string') return rawPrompt;
+
+  if (Array.isArray(rawPrompt)) {
+    return (rawPrompt as any[])
+      .map((item: any) => {
+        if (typeof item === 'string') return item;
+        if (item?.text) return item.text;
+        if (item?.value) return item.value;
+        if (item?.link) return item.link;
+        // 跳过纯占位符结果 ({}、[]、null)
+        const s = JSON.stringify(item);
+        if (s === '{}' || s === '[]' || s === 'null') return '';
+        return s;
+      })
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  if (rawPrompt && typeof rawPrompt === 'object') {
+    const obj = rawPrompt as any;
+    if (obj.text) return obj.text;
+    if (obj.value) return obj.value;
+    if (obj.link) return obj.link;
+    // 对象中无 text/value/link 字段时，检查是否是纯占位符
+    const s = JSON.stringify(rawPrompt);
+    if (s === '{}') return '';
+    return s;
+  }
+
+  return '';
+}
+
+/**
+ * 格式化成功结果。将 API 返回的视频 URL、尾帧、token、时长等信息
+ * 拼接为 \n 分隔的文本输出（飞书字段捷径 Text 类型结果）。
+ */
+function formatResult(
+  videoUrl: string,
+  lastFrameUrl: string,
+  tokens: number,
+  duration: string,
+  seed: number | undefined,
+  warnings: string[],
+): string {
+  const parts = [`🎬 ${videoUrl}`];
+  if (lastFrameUrl) {
+    parts.push(`🖼️ 尾帧: ${lastFrameUrl}`);
+  }
+  parts.push(`📊 Token: ${tokens}`);
+  parts.push(`⏱️ 时长: ${duration}s`);
+  if (seed !== undefined) {
+    parts.push(`🎲 种子: ${seed}`);
+  }
+  if (warnings.length > 0) {
+    parts.push(`⚠️ ${warnings.join('，')}`);
+  }
+  return parts.join('\n');
+}
+
 basekit.addField({
   i18n: {
     messages: {
@@ -226,63 +291,47 @@ basekit.addField({
     const rawFetch = context.fetch;
 
     try {
-      const params: FormItemParams = { ...formItemParams };
+      // 参数归一化
+      const normalized: FormItemParams = { ...formItemParams };
 
-      params.model = normalizeSelect(params.model) || DEFAULT_MODEL;
-      params.resolution = normalizeSelect(params.resolution) || DEFAULT_RESOLUTION;
-      params.ratio = normalizeSelect(params.ratio) || DEFAULT_RATIO;
-      params.duration = normalizeSelect(params.duration) || DEFAULT_DURATION;
-      params.generateAudio = normalizeSelect(params.generateAudio) === 'true';
-      params.returnLastFrame = normalizeSelect(params.returnLastFrame) === 'true';
-      params.watermark = normalizeSelect(params.watermark) === 'true';
-      params.cameraFixed = normalizeSelect(params.cameraFixed) === 'true';
-      params.serviceTier = normalizeSelect(params.serviceTier) || DEFAULT_SERVICE_TIER;
+      normalized.model = normalizeSelect(normalized.model) || DEFAULT_MODEL;
+      normalized.resolution = normalizeSelect(normalized.resolution) || DEFAULT_RESOLUTION;
+      normalized.ratio = normalizeSelect(normalized.ratio) || DEFAULT_RATIO;
+      normalized.duration = normalizeSelect(normalized.duration) || DEFAULT_DURATION;
+      normalized.generateAudio = normalizeSelect(normalized.generateAudio) === 'true';
+      normalized.returnLastFrame = normalizeSelect(normalized.returnLastFrame) === 'true';
+      normalized.watermark = normalizeSelect(normalized.watermark) === 'true';
+      normalized.cameraFixed = normalizeSelect(normalized.cameraFixed) === 'true';
+      normalized.serviceTier = normalizeSelect(normalized.serviceTier) || DEFAULT_SERVICE_TIER;
 
-      let promptText = '';
-      const rawPrompt = params.prompt;
-      if (typeof rawPrompt === 'string') {
-        promptText = rawPrompt;
-      } else if (Array.isArray(rawPrompt)) {
-        promptText = (rawPrompt as any[])
-          .map((item: any) => {
-            if (typeof item === 'string') return item;
-            if (item?.text) return item.text;
-            if (item?.value) return item.value;
-            if (item?.link) return item.link;
-            return JSON.stringify(item);
-          })
-          .join(' ');
-      } else if (rawPrompt && typeof rawPrompt === 'object') {
-        const obj = rawPrompt as any;
-        promptText = obj.text || obj.value || obj.link || JSON.stringify(rawPrompt);
-      }
-
+      const promptText = parsePromptText(normalized.prompt);
       if (!promptText.trim()) {
         log({ skip: true, reason: 'prompt为空，跳过执行' });
         return emptyResult;
       }
-
-      params.prompt = promptText;
+      normalized.prompt = promptText;
 
       log({
         params: {
-          model: params.model,
-          resolution: params.resolution,
-          ratio: params.ratio,
-          duration: params.duration,
-          generateAudio: params.generateAudio,
-          returnLastFrame: params.returnLastFrame,
+          model: normalized.model,
+          resolution: normalized.resolution,
+          ratio: normalized.ratio,
+          duration: normalized.duration,
+          generateAudio: normalized.generateAudio,
+          returnLastFrame: normalized.returnLastFrame,
           promptLength: promptText.length,
         },
       });
 
-      const validationError = validateParams(params);
+      const validationError = validateParams(normalized);
       if (validationError) {
         log({ validationError });
         return { code: FieldCode.Success as const, data: `❌ 参数校验失败: ${validationError}` };
       }
 
-      const { taskId, error: createError, warnings } = await createVideoTask(params, safeFetch, rawFetch, log);
+      const { taskId, error: createError, warnings } = await createVideoTask(
+        normalized, safeFetch, rawFetch, log,
+      );
       if (createError || !taskId) {
         log({ createError, taskId });
         return { code: FieldCode.Success as const, data: `❌ 生成失败: ${createError || '未知错误'}` };
@@ -290,7 +339,7 @@ basekit.addField({
 
       log({ taskId, msg: '任务创建成功，开始轮询' });
 
-      const result = await pollTask(taskId, params.apiKey, safeFetch, log);
+      const result = await pollTask(taskId, normalized.apiKey, safeFetch, log);
 
       if (!result) {
         return {
@@ -304,22 +353,17 @@ basekit.addField({
         const lastFrameUrl = result.content?.last_frame_url || '';
         const tokens = result.usage?.completion_tokens || 0;
 
-        log({ succeeded: true, videoUrl: videoUrl.slice(0, 200), lastFrameUrl: lastFrameUrl.slice(0, 200), tokens });
+        log({
+          succeeded: true,
+          videoUrl: videoUrl.slice(0, 200),
+          lastFrameUrl: lastFrameUrl.slice(0, 200),
+          tokens,
+        });
 
-        const parts = [`🎬 ${videoUrl}`];
-        if (lastFrameUrl) {
-          parts.push(`🖼️ 尾帧: ${lastFrameUrl}`);
-        }
-        parts.push(`📊 Token: ${tokens}`);
-        parts.push(`⏱️ 时长: ${result.duration || params.duration}s`);
-        if (result.seed !== undefined) {
-          parts.push(`🎲 种子: ${result.seed}`);
-        }
-        if (warnings.length > 0) {
-          parts.push(`⚠️ ${warnings.join('，')}`);
-        }
-
-        return { code: FieldCode.Success as const, data: parts.join('\n') };
+        return {
+          code: FieldCode.Success as const,
+          data: formatResult(videoUrl, lastFrameUrl, tokens, String(result.duration ?? normalized.duration), result.seed, warnings),
+        };
       }
 
       const failReason = result.error?.message || result.error || result.status;

@@ -1,3 +1,25 @@
+// ============================================================
+// 媒体类型扩展名统一配置
+// 所有 media.ts 中的扩展名判断统一从此处取值
+// ============================================================
+export const MEDIA_EXTENSIONS: Record<"image" | "video" | "audio", readonly string[]> = {
+  image: ["jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "svg"],
+  video: ["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "mpeg"],
+  audio: ["mp3", "wav", "aac", "ogg", "flac", "m4a", "wma"],
+} as const;
+
+export const MEDIA_MIME_EXT_MAP: Record<string, string> = {
+  "image/jpeg": "jpeg", "image/png": "png", "image/webp": "webp",
+  "image/bmp": "bmp", "image/tiff": "tiff", "image/gif": "gif", "image/svg+xml": "svg",
+  "video/mp4": "mp4", "video/quicktime": "mov", "video/x-msvideo": "avi",
+  "video/x-matroska": "mkv", "video/webm": "webm",
+  "audio/mpeg": "mp3", "audio/wav": "wav", "audio/aac": "aac",
+  "audio/ogg": "ogg", "audio/flac": "flac",
+};
+
+export const R2V_MAX_PIXELS = 927408;
+
+
 export const SEEDANCE_API_BASE = 'https://ark.cn-beijing.volces.com/api/v3';
 export const SEEDANCE_CREATE_TASK_URL = `${SEEDANCE_API_BASE}/contents/generations/tasks`;
 export const SEEDANCE_QUERY_TASK_URL_PREFIX = `${SEEDANCE_API_BASE}/contents/generations/tasks/`;
