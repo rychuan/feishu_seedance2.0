@@ -232,10 +232,10 @@ basekit.addField({
       params.resolution = normalizeSelect(params.resolution) || DEFAULT_RESOLUTION;
       params.ratio = normalizeSelect(params.ratio) || DEFAULT_RATIO;
       params.duration = normalizeSelect(params.duration) || DEFAULT_DURATION;
-      params.generateAudio = normalizeSelect(params.generateAudio) || 'false';
-      params.returnLastFrame = normalizeSelect(params.returnLastFrame) || 'false';
-      params.watermark = normalizeSelect(params.watermark) || 'false';
-      params.cameraFixed = normalizeSelect(params.cameraFixed) || 'false';
+      params.generateAudio = normalizeSelect(params.generateAudio) === 'true';
+      params.returnLastFrame = normalizeSelect(params.returnLastFrame) === 'true';
+      params.watermark = normalizeSelect(params.watermark) === 'true';
+      params.cameraFixed = normalizeSelect(params.cameraFixed) === 'true';
       params.serviceTier = normalizeSelect(params.serviceTier) || DEFAULT_SERVICE_TIER;
 
       let promptText = '';

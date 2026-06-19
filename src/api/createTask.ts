@@ -10,6 +10,7 @@ import {
   batchDownloadAndUploadAudios,
 } from '../utils/media';
 import { SafeFetchFn, sanitizeForOutput } from '../utils/fetch';
+import { countAttachments } from '../utils/media';
 import { sleep } from '../utils/poll';
 
 const MAX_CREATE_RETRIES = 2;
@@ -56,10 +57,6 @@ export function validateParams(params: FormItemParams): string | null {
     }
   }
 
-  const imageAttachments = extractImageAttachments(mergeAttachmentFields(params, IMAGE_FIELD_KEYS));
-  const videoAttachments = extractVideoAttachments(mergeAttachmentFields(params, VIDEO_FIELD_KEYS));
-  const audioAttachments = extractAudioAttachments(mergeAttachmentFields(params, AUDIO_FIELD_KEYS));
-
   if (params.duration) {
     const durNum = parseInt(params.duration, 10);
     if (durNum < 4 || durNum > 15) {
@@ -67,9 +64,12 @@ export function validateParams(params: FormItemParams): string | null {
     }
   }
 
-  if (imageAttachments.length > 9) return '图片最多支持9张';
-  if (videoAttachments.length > 3) return '视频最多支持3段';
-  if (audioAttachments.length > 3) return '音频最多支持3段';
+  const imageCount = countAttachments(params, IMAGE_FIELD_KEYS, 'image');
+  const videoCount = countAttachments(params, VIDEO_FIELD_KEYS, 'video');
+  const audioCount = countAttachments(params, AUDIO_FIELD_KEYS, 'audio');
+  if (imageCount > 9) return '图片最多支持9张';
+  if (videoCount > 3) return '视频最多支持3段';
+  if (audioCount > 3) return '音频最多支持3段';
 
   return null;
 }
@@ -166,12 +166,12 @@ function buildRequestBody(params: FormItemParams, content: SeedanceContentItem[]
   if (params.ratio) {
     body.ratio = params.ratio;
   }
-  body.watermark = params.watermark === 'true';
-  body.generate_audio = params.generateAudio === 'true';
-  if (params.returnLastFrame === 'true') {
+  body.watermark = params.watermark;
+  body.generate_audio = params.generateAudio;
+  if (params.returnLastFrame) {
     body.return_last_frame = true;
   }
-  if (params.cameraFixed === 'true') {
+  if (params.cameraFixed) {
     body.camera_fixed = true;
   }
   if (params.serviceTier) {

@@ -1,4 +1,5 @@
 import https from 'https';
+import { sleep } from './poll';
 import { LITTERBOX_UPLOAD_URL, LITTERBOX_EXPIRY } from '../constants';
 import { Attachment } from '../types';
 
@@ -7,14 +8,12 @@ const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const MAX_UPLOAD_RETRIES = 2;
 const UPLOAD_RETRY_DELAY_MS = 3000;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 
 export interface BatchResult {
   successes: string[];
   failures: number;
+  failedNames: string[];
 }
 
 function cleanUrl(url: string): string {
@@ -90,6 +89,32 @@ export function mergeAttachmentFields(params: any, fieldKeys: string[]): Attachm
   }
   return merged;
 }
+export function countAttachments(params: any, fieldKeys: string[], category: 'image' | 'video' | 'audio'): number {
+  const mimePrefix = category === 'image' ? 'image/' : category === 'video' ? 'video/' : 'audio/';
+  const extRegexes: Record<string, RegExp> = {
+    image: /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i,
+    video: /\.(mp4|mov|avi|mkv|webm|flv|wmv)$/i,
+    audio: /\.(mp3|wav|aac|ogg|flac|m4a|wma)$/i,
+  };
+  const extRegex = extRegexes[category];
+  let count = 0;
+  const seen = new Set<string>();
+  for (const key of fieldKeys) {
+    const fieldData = params[key];
+    if (!Array.isArray(fieldData)) continue;
+    for (const item of fieldData as any[]) {
+      const dedupKey = item.tmp_url || item.url || item.name || '';
+      if (dedupKey && seen.has(dedupKey)) continue;
+      if (dedupKey) seen.add(dedupKey);
+      const fileType = (item.type || item.mimeType || '').toLowerCase();
+      if (fileType.startsWith(mimePrefix)) { count++; continue; }
+      const name = (item.name || '').toLowerCase();
+      if (extRegex.test(name)) count++;
+    }
+  }
+  return count;
+}
+
 
 async function downloadAttachment(
   tmpUrl: string,
@@ -148,11 +173,12 @@ export async function batchDownloadAndEncode(
   maxCount: number,
   debugLog?: (arg: any) => void
 ): Promise<BatchResult> {
-  if (!Array.isArray(attachments) || attachments.length === 0) return { successes: [], failures: 0 };
+  if (!Array.isArray(attachments) || attachments.length === 0) return { successes: [], failures: 0, failedNames: [] };
 
   const successes: string[] = [];
   let failures = 0;
   const items = attachments.slice(0, maxCount);
+  const failedNames: string[] = [];
 
 
   const results = await Promise.allSettled(
@@ -176,11 +202,13 @@ export async function batchDownloadAndEncode(
       successes.push(result.value);
     } else {
       failures++;
+      
+      failedNames.push(items[i]?.name || "unknown");
       debugLog?.({ [`===图片 ${i + 1} 下载失败`]: { fileName: items[i]?.name || '', error: String(result.reason) } });
     }
   }
 
-  return { successes, failures };
+  return { successes, failures, failedNames };
 }
 
 async function uploadToLitterboxOnce(
@@ -284,11 +312,12 @@ export async function batchDownloadAndUploadVideos(
   maxCount: number,
   debugLog?: (arg: any) => void
 ): Promise<BatchResult> {
-  if (!Array.isArray(attachments) || attachments.length === 0) return { successes: [], failures: 0 };
+  if (!Array.isArray(attachments) || attachments.length === 0) return { successes: [], failures: 0, failedNames: [] };
 
   const successes: string[] = [];
   let failures = 0;
   const items = attachments.slice(0, maxCount);
+  const failedNames: string[] = [];
 
   const results = await Promise.allSettled(
     items.map(async (item, i) => {
@@ -308,11 +337,13 @@ export async function batchDownloadAndUploadVideos(
       successes.push(result.value);
     } else {
       failures++;
+      
+      failedNames.push(items[i]?.name || "unknown");
       debugLog?.({ [`===视频 ${i + 1} 处理失败`]: { fileName: items[i]?.name || `video_${i}.mp4`, error: String(result.reason) } });
     }
   }
 
-  return { successes, failures };
+  return { successes, failures, failedNames };
 }
 
 export async function batchDownloadAndUploadAudios(
@@ -321,11 +352,12 @@ export async function batchDownloadAndUploadAudios(
   maxCount: number,
   debugLog?: (arg: any) => void
 ): Promise<BatchResult> {
-  if (!Array.isArray(attachments) || attachments.length === 0) return { successes: [], failures: 0 };
+  if (!Array.isArray(attachments) || attachments.length === 0) return { successes: [], failures: 0, failedNames: [] };
 
   const successes: string[] = [];
   let failures = 0;
   const items = attachments.slice(0, maxCount);
+  const failedNames: string[] = [];
 
   const results = await Promise.allSettled(
     items.map(async (item, i) => {
@@ -345,11 +377,13 @@ export async function batchDownloadAndUploadAudios(
       successes.push(result.value);
     } else {
       failures++;
+      
+      failedNames.push(items[i]?.name || "unknown");
       debugLog?.({ [`===音频 ${i + 1} 处理失败`]: { fileName: items[i]?.name || `audio_${i}.mp3`, error: String(result.reason) } });
     }
   }
 
-  return { successes, failures };
+  return { successes, failures, failedNames };
 }
 
 async function uploadToLitterbox(

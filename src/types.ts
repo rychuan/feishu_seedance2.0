@@ -17,10 +17,10 @@ export interface FormItemParams {
   resolution: string;
   ratio: string;
   duration: string;
-  generateAudio: string;
-  returnLastFrame: string;
-  watermark: string;
-  cameraFixed: string;
+  generateAudio: boolean;
+  returnLastFrame: boolean;
+  watermark: boolean;
+  cameraFixed: boolean;
   serviceTier: string;
   seed: string;
 }
